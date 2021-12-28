@@ -3,6 +3,7 @@ package main
 import (
 	"container/heap"
 	"context"
+	"flag"
 	"fmt"
 	. "github.com/idaifish/ping-cf/internal"
 	"os"
@@ -11,7 +12,12 @@ import (
 	"syscall"
 )
 
+var numWorker = flag.Int("n", 64, "number of workers")
+var top = flag.Int("top", 10, "print topN results")
+
 func main() {
+	flag.Parse()
+
 	var results FinalResult
 	heap.Init(&results)
 	resultsChan := make(chan PingResult, 100)
@@ -34,20 +40,12 @@ func main() {
 		}
 	}()
 
-	for i := 0; i < 64; i++ {
+	for i := 0; i < *numWorker; i++ {
 		wg.Add(1)
 		go Worker(ctx, wg, cloudflareIPs, resultsChan)
 	}
 
 	wg.Wait()
 
-	fmt.Fprintf(os.Stderr, "\u001B[2K\nTop 10 / %d:\n", len(results))
-
-	if len(results) > 10 {
-		fmt.Printf("\t%-15s\t%s\t%s\t%s\n", "IP Address", "Lat", "Tran", "Rece")
-		for i := 0; i < 10; i++ {
-			r := heap.Pop(&results).(PingResult)
-			fmt.Printf("\t%-15s\t%dms\t%d\t%d\n", r.IP, r.Latency.Milliseconds(), r.Transmitted, r.Received)
-		}
-	}
+	results.Top(*top)
 }

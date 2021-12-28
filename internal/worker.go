@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"sync"
@@ -11,7 +12,7 @@ import (
 
 const maxEndurableLatency = 350 * time.Millisecond
 
-var pingCount = uint8(4)
+var pingCount = flag.Int("c", 4, "count of ping.")
 var errUnreachable = errors.New("unreachable IP")
 
 func tcpPing(ip net.IP, count uint8) (result *PingResult, err error) {
@@ -54,7 +55,7 @@ func Worker(ctx context.Context, wg *sync.WaitGroup, ipChan chan net.IP, resultC
 			return
 		case ip := <-ipChan:
 			if ip != nil {
-				result, err := tcpPing(ip, pingCount)
+				result, err := tcpPing(ip, uint8(*pingCount))
 				if err == nil {
 					if (float32(result.Received) / float32(result.Transmitted)) > 0.75 {
 						resultChan <- *result
