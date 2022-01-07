@@ -21,9 +21,8 @@ func GetIP() chan net.IP {
 		defer close(ipChan)
 
 		cidrs := strings.Split(CIDRs, "\n")
-		rand.Shuffle(len(cidrs), func(i, j int) {
-			cidrs[i], cidrs[j] = cidrs[j], cidrs[i]
-		})
+		_ipChan := make(chan net.IP)
+		var total int
 		for _, cidr := range cidrs {
 			_, ipnet, err := net.ParseCIDR(cidr)
 			if err != nil {
@@ -33,12 +32,20 @@ func GetIP() chan net.IP {
 			startIP := binary.BigEndian.Uint32(ipnet.IP)
 			mask := binary.BigEndian.Uint32(ipnet.Mask)
 			endIP := (startIP & mask) | (mask ^ 0xffffffff)
+			length := endIP - startIP
+			total += int(length)
 
-			for i := startIP; i <= endIP; i++ {
-				ip := make(net.IP, 4)
-				binary.BigEndian.PutUint32(ip, i)
-				ipChan <- ip
-			}
+			go func(start, l uint32, ipChan chan<- net.IP) {
+				for _, v := range rand.Perm(int(l)) {
+					ip := make(net.IP, 4)
+					binary.BigEndian.PutUint32(ip, start+uint32(v))
+					ipChan <- ip
+				}
+			}(startIP, length, _ipChan)
+		}
+
+		for i := 0; i < total; i++ {
+			ipChan <- <-_ipChan
 		}
 	}(ipChan)
 
